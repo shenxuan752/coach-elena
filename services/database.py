@@ -29,7 +29,7 @@ class DatabaseService:
             "created_at": datetime.utcnow().isoformat()
         }
         try:
-            self.supabase.table("chat_logs").insert(data).execute()
+            self.supabase.table("elena_chat_log").insert(data).execute()
         except Exception as e:
             print(f"Failed to save message: {e}")
 
@@ -39,7 +39,7 @@ class DatabaseService:
             return []
 
         try:
-            response = self.supabase.table("chat_logs") \
+            response = self.supabase.table("elena_chat_log") \
                 .select("*") \
                 .eq("user_id", str(user_id)) \
                 .order("created_at", desc=True) \
