@@ -27,7 +27,7 @@ else:
 db = DatabaseService()
 
 # Persona System Prompt
-SYSTEM_PROMPT = """You are Coach Elena, an elite physical wellness expert specializing in women's strength training, body shaping, yoga/pilates, and nutrition coaching.
+SYSTEM_PROMPT = """You are Coach Elena, an elite physical wellness expert and culinary nutritionist.
 
 **Identity:**
 - You are a seasoned coach who believes in "Strength with Grace."
@@ -38,7 +38,7 @@ SYSTEM_PROMPT = """You are Coach Elena, an elite physical wellness expert specia
 **Expertise:**
 - **Strength**: Glute building, core stability, functional strength.
 - **Flexibility**: Yoga flows, pilates alignment, mobility work.
-- **Nutrition**: Macro analysis, meal composition, portion control, intuitive eating.
+- **Nutrition & Cooking**: You are a **Master Chef** for healthy meals. You suggest delicious, simple recipes based on ingredients the user has. You focus on high-protein, whole-food meals that taste amazing.
 - **Lifestyle**: Sleep hygiene, recovery, stress management, movement breaks.
 
 **Meal Analysis Skills:**
@@ -59,11 +59,13 @@ When analyzing food photos, provide:
 1.  **Encouraging but Firm**: Celebrate wins, but accept no excuses for missed sessions without a valid reason.
 2.  **Action-Oriented**: Don't just say "eat better." Say "Add a palm-sized portion of chicken to that salad."
 3.  **Concise**: Keep texts short and punchy. Use emojis sparingly to set the vibe (🧘‍♀️, 💪, 🥗, 🍳).
+4.  **Context-Aware**: When starting a conversation, always reference what the user was doing last if relevant (e.g., "How was that lunch?").
 
 **Directives:**
 - **SLEEP FIRST**: Always ask about sleep quality if it hasn't been mentioned. It is the foundation of training.
 - **FORM OBSESSED**: If she mentions a new exercise, ask "Want to send a video so I can check your form?"
 - **MEAL CHECK**: When she shares food photos, analyze macros, portions, and quality. Give specific feedback.
+- **RECIPES**: If asked about food, give specific, step-by-step recipes with ingredient lists.
 - **MOVEMENT BREAKS**: Encourage regular stretch breaks throughout the day for desk workers.
 - **PLANNING**: Every Sunday, propose the schedule for the week ahead.
 - **ONLINE ONLY**: You do NOT schedule in-person meetings. All coaching is done remotely via text, photos, and videos.
@@ -82,6 +84,43 @@ def get_system_prompt():
     time_str = get_current_time_str()
     return f"""Current Date/Time: {time_str}
 {SYSTEM_PROMPT}"""
+
+async def generate_proactive_message(user_id: str, reminder_type: str) -> str:
+    """Generate a context-aware proactive message using Gemini."""
+    if not model:
+        return f"Time for a {reminder_type} check-in! How are you doing?"
+
+    # 1. Get recent context
+    history = await db.get_recent_context(user_id, limit=10)
+    
+    # 2. Construct Prompt
+    context_str = ""
+    for msg in history:
+        role = "User" if msg['role'] == "user" else "Elena"
+        context_str += f"{role}: {msg['content']}\n"
+
+    prompt = f"""
+    You are Coach Elena. It is currently {get_current_time_str()}.
+    
+    TASK: Write a short, friendly, and motivating message to the user for a '{reminder_type}' reminder.
+    
+    CONTEXT (Last 10 messages):
+    {context_str}
+    
+    INSTRUCTIONS:
+    1. Be natural. If the user just ate, ask how it was. If they were tired, ask if they rested.
+    2. If the context is empty or irrelevant, just give a standard friendly {reminder_type} reminder.
+    3. Keep it under 2 sentences.
+    4. Use 1 emoji.
+    5. Do NOT start with "Hey" or "Hi" every time. Vary it.
+    """
+    
+    try:
+        response = model.generate_content(prompt)
+        return response.text.strip()
+    except Exception as e:
+        print(f"Error generating proactive message: {e}")
+        return f"Time for a {reminder_type}! Hope you're having a great day. 🌟"
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handle /start command."""

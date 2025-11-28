@@ -6,7 +6,7 @@ try:
 except ImportError:
     from backports.zoneinfo import ZoneInfo  # Fallback for older Python versions
 
-from services.telegram_bot import application
+from services.telegram_bot import application, generate_proactive_message
 from services.database import DatabaseService
 from dotenv import load_dotenv
 
@@ -68,14 +68,14 @@ async def proactive_loop():
         if now.hour == 22 and now.minute == 25:
             await trigger_evening_winddown()
             
-        # --- STRETCH REMINDERS (Fixed Slots) ---
-        # Schedule: 10:00, 11:30, 13:00, 14:30, 16:00, 17:30, 19:00, 20:30, 22:00, 23:30
+        # --- STRETCH REMINDERS (Every 1 Hour) ---
+        # Schedule: 10:00, 11:00, 13:00, 14:00, 15:00, 16:00, 17:00, 19:00, 20:00, 21:00, 22:00, 23:00
         stretch_slots = [
-            (10, 0), (11, 30),
-            (13, 0), (14, 30),
-            (16, 0), (17, 30),
-            (19, 0), (20, 30),
-            (22, 0), (23, 30)
+            (10, 0), (11, 0),
+            (13, 0), (14, 0), (15, 0),
+            (16, 0), (17, 0),
+            (19, 0), (20, 0), (21, 0),
+            (22, 0), (23, 0)
         ]
         
         if (now.hour, now.minute) in stretch_slots:
@@ -83,12 +83,13 @@ async def proactive_loop():
 
 async def trigger_daily_checkin():
     """Trigger daily sleep/diet check."""
-    if not USER_TELEGRAM_ID or not application:
-        return
+    if not USER_TELEGRAM_ID or not application: return
     try:
-        if not application._initialized:
-            await application.initialize()
-        msg = "Good morning! ☀️ How was your sleep quality last night? And what's the plan for breakfast?"
+        if not application._initialized: await application.initialize()
+        
+        # Dynamic Message
+        msg = await generate_proactive_message(USER_TELEGRAM_ID, "morning check-in (sleep & breakfast)")
+        
         await application.bot.send_message(chat_id=USER_TELEGRAM_ID, text=msg)
         await db.save_message(USER_TELEGRAM_ID, "assistant", msg, "telegram_elena")
     except Exception as e:
@@ -96,12 +97,12 @@ async def trigger_daily_checkin():
 
 async def trigger_body_check():
     """Trigger 3-day body check."""
-    if not USER_TELEGRAM_ID or not application:
-        return
+    if not USER_TELEGRAM_ID or not application: return
     try:
-        if not application._initialized:
-            await application.initialize()
-        msg = "Time for a body check-in. 🧘‍♀️\n1. How are your energy levels?\n2. Any soreness?\n3. Have you moved your body today?"
+        if not application._initialized: await application.initialize()
+        
+        msg = await generate_proactive_message(USER_TELEGRAM_ID, "body check-in (energy, soreness, movement)")
+        
         await application.bot.send_message(chat_id=USER_TELEGRAM_ID, text=msg)
         await db.save_message(USER_TELEGRAM_ID, "assistant", msg, "telegram_elena")
     except Exception as e:
@@ -111,7 +112,9 @@ async def trigger_breakfast_reminder():
     if not USER_TELEGRAM_ID or not application: return
     try:
         if not application._initialized: await application.initialize()
-        msg = "Time for breakfast! 🍳 What are you having? Feel free to share a photo so I can check the nutrition balance."
+        
+        msg = await generate_proactive_message(USER_TELEGRAM_ID, "breakfast")
+        
         await application.bot.send_message(chat_id=USER_TELEGRAM_ID, text=msg)
         await db.save_message(USER_TELEGRAM_ID, "assistant", msg, "telegram_elena")
     except Exception as e: print(f"Failed to trigger breakfast reminder: {e}")
@@ -120,7 +123,9 @@ async def trigger_lunch_reminder():
     if not USER_TELEGRAM_ID or not application: return
     try:
         if not application._initialized: await application.initialize()
-        msg = "Lunch time! 🥗 What's on your plate today? Send me a pic and I'll give you feedback on the macros."
+        
+        msg = await generate_proactive_message(USER_TELEGRAM_ID, "lunch")
+        
         await application.bot.send_message(chat_id=USER_TELEGRAM_ID, text=msg)
         await db.save_message(USER_TELEGRAM_ID, "assistant", msg, "telegram_elena")
     except Exception as e: print(f"Failed to trigger lunch reminder: {e}")
@@ -129,7 +134,9 @@ async def trigger_dinner_reminder():
     if not USER_TELEGRAM_ID or not application: return
     try:
         if not application._initialized: await application.initialize()
-        msg = "Dinner time! 🍽️ Let's see what you're fueling your body with tonight. Share a photo for my analysis!"
+        
+        msg = await generate_proactive_message(USER_TELEGRAM_ID, "dinner")
+        
         await application.bot.send_message(chat_id=USER_TELEGRAM_ID, text=msg)
         await db.save_message(USER_TELEGRAM_ID, "assistant", msg, "telegram_elena")
     except Exception as e: print(f"Failed to trigger dinner reminder: {e}")
@@ -139,7 +146,9 @@ async def trigger_stretch_reminder():
     print("Triggering Stretch Reminder...")
     try:
         if not application._initialized: await application.initialize()
-        msg = "Time to move! 🧘‍♀️ You've been sitting for a while. Take 5 minutes to:\n• Stand up and stretch\n• Roll your shoulders\n• Walk around\n• Hydrate 💧\n\nYour body will thank you!"
+        
+        msg = await generate_proactive_message(USER_TELEGRAM_ID, "stretch break")
+        
         await application.bot.send_message(chat_id=USER_TELEGRAM_ID, text=msg)
         await db.save_message(USER_TELEGRAM_ID, "assistant", msg, "telegram_elena")
     except Exception as e: print(f"Failed to trigger stretch reminder: {e}")
@@ -149,18 +158,9 @@ async def trigger_evening_winddown():
     print("Triggering Evening Wind-Down...")
     try:
         if not application._initialized: await application.initialize()
-        msg = """Time to wind down for the night! 🌙
-
-Let's recap today:
-• What did you eat today? Any meals you're proud of?
-• Did you get your movement/exercise in?
-
-**Sleep prep tips:**
-✨ Try 5 deep breaths (4-7-8 technique)
-📱 Put your phone away in 10 minutes
-🙏 Think of one thing you're grateful for today
-
-Get ready for bed soon - quality sleep is the foundation of everything! 😴💤"""
+        
+        msg = await generate_proactive_message(USER_TELEGRAM_ID, "evening wind-down (sleep prep)")
+        
         await application.bot.send_message(chat_id=USER_TELEGRAM_ID, text=msg)
         await db.save_message(USER_TELEGRAM_ID, "assistant", msg, "telegram_elena")
     except Exception as e: print(f"Failed to trigger evening wind-down: {e}")
